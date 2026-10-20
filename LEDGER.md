@@ -1,5 +1,11 @@
 # LEDGER
 
+## 2026-10-20 - Purged Runtime Logs and Compiled Pycache; Scoped README Verification Claims
+- Purged 10 compiled `__pycache__` (.pyc) files and 2 runtime `.log` files from git tracking.
+- Added `*.log` to `.gitignore`.
+- Bound README claims: replaced overbroad '100% Verified Engine-Level' badge with 'Harness Suites PASS (4/4)'; added explicit 'Scope of Verification & Known Boundaries' section documenting proven mechanisms vs out-of-scope kernel/network boundaries.
+- Pushed commit `8381792` to GitHub `master`.
+
 ## 2026-10-20 - Published agy-agents-harness to GitHub
 - Initialized publication-grade repository at `~/projects/agy-agents-harness`.
 - Published open-source repository on GitHub: `https://github.com/leonardograndosilveira/agy-agents-harness`.
