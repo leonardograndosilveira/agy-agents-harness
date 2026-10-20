@@ -1,5 +1,10 @@
 # LEDGER
 
+## 2026-10-20 - Published agy-agents-harness to GitHub
+- Initialized publication-grade repository at `~/projects/agy-agents-harness`.
+- Published open-source repository on GitHub: `https://github.com/leonardograndosilveira/agy-agents-harness`.
+- Packaged complete agent specs (`council-moderator.md`, `debate-participant.md`), lifecycle hook configuration (`hooks.json.example`), Apache 2.0 license, and comprehensive test harness suites (`test_live_council_gate.py`, `regression_suite.py`, `test_adversarial_v2.py`, `run_all_tests.py`).
+
 ## 2026-10-20 - Live Council Engine Enforcement & Bypass Resistance Verification
 - Verified Real Antigravity PreToolUse Hook: Live tool interceptions captured in `live_hook.log` for both direct runtime and `agy` CLI operations.
 - Verified Zero-Side-Effect Bypass Resistance: Direct agent tool call and headless CLI command attempting write to `/tmp/unauthorized_test_escape.txt` were intercepted and hard-denied by `live_pre_tool_hook.py` before execution. Verified 0 bytes on disk.
