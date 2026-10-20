@@ -1,14 +1,11 @@
 # LEDGER
 
-## 2026-10-20 - Adversarial Test Suite Round 2: Real Runtime Enforcement
-- Addressed GPT audit: transitioned from mock string-checks to genuine runtime enforcement.
-- Created `scratch/test_harness/v2/` with immutable fixtures (`fixtures/adversarial_cases.json`).
-- Built & verified 4 enforcement modules:
-  - `path_confinement_validator.py`: Enforces workspace containment; strictly blocked `/tmp/` writes that OS DAC permits.
-  - `semantic_evidence_validator.py`: Content-aware citation verifier; caught and rejected real files cited with false claims (FG-02).
-  - `process_group_runner.py`: Enforces OS-level `RLIMIT_AS` memory ceilings and process-group `killpg` (0 orphaned processes).
-  - `semantic_evaluation_gate.py`: Detected sneaky false-consensus wording (`there is no dissent, all agreed 100%`) when divergent theses were present.
-- Executed `test_adversarial_v2.py`: 5/5 real adversarial tests passed.
+## 2026-10-20 - Council Runtime Interception & Regression Benchmark (SHA: 81b11d2)
+- Built `scratch/test_harness/council_runtime/`:
+  - `runtime_interceptor.py`: Intercepts raw tool calls at the engine boundary (`PreToolUse`); blocked `/tmp/` escapes without calling any manual helper.
+  - `council_orchestrator.py`: Implemented fail-closed ratification gate; halted execution and aborted ratification upon detecting facade citations.
+  - `regression_suite.py`: Demonstrated that Baseline Council permitted 3 critical defects (fabricated benchmark, false atomicity, false consensus), whereas Enforced Council blocked Turn 1 and only ratified Turn 2 after genuine grounding and dissent trade-off matrix were supplied.
+- Initialized git tracking in `scratch/` under commit `81b11d2`.
 
 ## 2026-10-20 - Multi-Agent Council Hardening & Acceptance Test Harness
 - Hardened custom agent definitions `council-moderator.md` and `debate-participant.md` under `~/.gemini/config/agents/`.

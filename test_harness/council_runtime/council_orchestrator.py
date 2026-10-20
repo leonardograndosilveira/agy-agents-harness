@@ -72,17 +72,27 @@ class EnforcedCouncilOrchestrator:
         # 3. Audit dissent preservation (against sneaky consensus)
         dissent_check = self.dissent_gate.evaluate_dissent_handling(theses, draft_resolution_report)
 
+        # 4. Audit evidence completeness (checking for ungrounded numbers like +300% or 85% CPU)
+        evidence_texts = [d.get("claim", "") for d in debaters_outputs]
+        quant_check = self.evaluation_gate.audit_quantitative_assertions(draft_resolution_report, evidence_texts)
+
         audit_trail["slop_audit"] = slop_check
         audit_trail["safety_audit"] = safety_check
         audit_trail["dissent_audit"] = dissent_check
+        audit_trail["quantitative_audit"] = quant_check
 
-        if not slop_check["passed"] or not safety_check["passed"] or not dissent_check["passed"]:
+        if not slop_check["passed"] or not safety_check["passed"] or not dissent_check["passed"] or not quant_check["passed"]:
             audit_trail["gate_passed"] = False
 
-        # 4. FAIL-CLOSED RATIFICATION GATE
+        # 5. FAIL-CLOSED RATIFICATION GATE
         if not audit_trail["gate_passed"]:
             audit_trail["status"] = "RATIFICATION_BLOCKED"
-            audit_trail["final_action"] = "HALTED: Council resolution rejected by independent evaluation gate. Revision required."
+            reasons = []
+            if not slop_check["passed"]: reasons.append("Slop/Pseudo-math")
+            if not safety_check["passed"]: reasons.append("Safety/False-atomicity")
+            if not dissent_check["passed"]: reasons.append("Sneaky-consensus/Dissent-missing")
+            if not quant_check["passed"]: reasons.append(f"Ungrounded-metrics: {quant_check['violations']}")
+            audit_trail["final_action"] = f"HALTED: Council resolution rejected by independent evaluation gate ({', '.join(reasons)}). Revision required."
             return audit_trail
 
         # 5. APPROVED & RATIFIED

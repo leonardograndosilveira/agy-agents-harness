@@ -3,7 +3,7 @@
 Independent Evaluation Gate
 Acts as the external, non-self-grading audit layer for council outputs.
 Evaluates evidence validity, slop/pseudo-math absence, consequence tagging,
-and dissent preservation.
+dissent preservation, and evidence completeness (blocking ungrounded quantitative metrics).
 """
 
 import re
@@ -61,7 +61,6 @@ class EvaluationGate:
         Verifies that when debaters legitimately disagree on engineering trade-offs,
         the final report does not manufacture a fake unanimous vote.
         """
-        # Simple heuristic check: if debaters have opposing positions
         has_divergent_theses = len(set(debaters_theses)) > 1
         claims_unanimous = bool(re.search(r'unanimous.*(ratification|3\s*-\s*0|consensus)', final_report, re.IGNORECASE))
         has_dissent_matrix = bool(re.search(r'(dissent|trade-off.*matrix|unresolved)', final_report, re.IGNORECASE))
@@ -79,24 +78,59 @@ class EvaluationGate:
             "legitimate_resolution": True
         }
 
+    def audit_quantitative_assertions(self, final_report: str, evidence_texts: List[str] = None) -> Dict[str, Any]:
+        """
+        Evidence Completeness Check:
+        Detects ungrounded quantitative assertions in the final synthesis
+        (e.g., '+300%', '85% CPU', '<5ms') that lack grounding in verified evidence.
+        """
+        evidence_texts = evidence_texts or []
+        combined_evidence = " ".join(evidence_texts)
+        violations = []
+
+        # Find metrics like +300%, -40%, 85% CPU, 10k QPS, <5ms
+        metric_patterns = [
+            r'[+-]\d+%',
+            r'\b\d{1,3}%\s+(?:CPU|RAM|memory|capacity|saturation|throughput|latency|disk)',
+            r'\b\d+(?:k|K|M)?\s*(?:QPS|qps|req/s|iops|IOPS)',
+            r'[<>]\s*\d+\s*(?:ms|s|sec)'
+        ]
+
+        for p in metric_patterns:
+            for match in re.finditer(p, final_report):
+                metric = match.group(0).strip()
+                # If metric is NOT present in any evidence text or receipts, flag it
+                if metric.lower() not in combined_evidence.lower():
+                    violations.append(f"UNGROUNDED_SYNTHESIS_METRIC: Metric '{metric}' asserted in final report without benchmark grounding in evidence receipts.")
+
+        return {
+            "passed": len(violations) == 0,
+            "violations": violations
+        }
+
     def run_full_evaluation(self, 
                             report_text: str, 
                             evidence_receipt: str, 
-                            debater_theses: List[str] = None) -> Dict[str, Any]:
+                            debater_theses: List[str] = None,
+                            evidence_texts: List[str] = None) -> Dict[str, Any]:
         """
         Executes all audit gates. Returns composite score and pass/fail status.
         """
         debater_theses = debater_theses or []
+        evidence_texts = evidence_texts or [evidence_receipt]
+
         evidence_res = self.evidence_validator.validate_receipt(evidence_receipt)
         slop_res = self.audit_anti_slop(report_text)
         safety_res = self.audit_atomicity_and_rollback(report_text)
         dissent_res = self.audit_dissent_preservation(debater_theses, report_text)
+        quant_res = self.audit_quantitative_assertions(report_text, evidence_texts)
 
         all_passed = (
             evidence_res["passed"] and 
             slop_res["passed"] and 
             safety_res["passed"] and 
-            dissent_res["passed"]
+            dissent_res["passed"] and
+            quant_res["passed"]
         )
 
         return {
@@ -105,5 +139,6 @@ class EvaluationGate:
             "evidence_gate": evidence_res,
             "anti_slop_gate": slop_res,
             "safety_gate": safety_res,
-            "dissent_preservation_gate": dissent_res
+            "dissent_preservation_gate": dissent_res,
+            "quantitative_completeness_gate": quant_res
         }
