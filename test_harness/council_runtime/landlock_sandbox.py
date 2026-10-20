@@ -33,9 +33,13 @@ LANDLOCK_ACCESS_FS_MAKE_FIFO = (1 << 10)
 LANDLOCK_ACCESS_FS_MAKE_BLOCK = (1 << 11)
 LANDLOCK_ACCESS_FS_MAKE_SYM = (1 << 12)
 
-# Handled filesystem mutations for sandbox boundary
+LANDLOCK_ACCESS_FS_TRUNCATE = (1 << 14)
+
+# Handled filesystem mutations for sandbox boundary (including overwrite and truncate)
 ACCESS_FS_MUTATE = (
-    LANDLOCK_ACCESS_FS_REMOVE_DIR
+    LANDLOCK_ACCESS_FS_WRITE_FILE
+    | LANDLOCK_ACCESS_FS_TRUNCATE
+    | LANDLOCK_ACCESS_FS_REMOVE_DIR
     | LANDLOCK_ACCESS_FS_REMOVE_FILE
     | LANDLOCK_ACCESS_FS_MAKE_DIR
     | LANDLOCK_ACCESS_FS_MAKE_REG
@@ -67,8 +71,9 @@ def is_landlock_supported() -> bool:
 def restrict_process_to_workspaces(allowed_write_workspaces: List[str]) -> bool:
     """
     Applies Landlock ruleset to the current process:
-    - Mutating operations (create, delete, symlink, mkdir) restricted exclusively to allowed_write_workspaces.
-    - System character devices (/dev/null, stdio) remain operational.
+    - Mutating operations (write, truncate, create, delete, symlink, mkdir) restricted
+      exclusively to allowed_write_workspaces.
+    - System character devices (/dev/null, stdio) remain operational via /dev write grant.
     Once restricted, all child processes and threads inherit this restriction irreversibly.
     """
     try:
@@ -77,6 +82,13 @@ def restrict_process_to_workspaces(allowed_write_workspaces: List[str]) -> bool:
         ruleset_fd = libc.syscall(SYS_landlock_create_ruleset, ctypes.byref(attr), ctypes.sizeof(attr), 0)
         if ruleset_fd < 0:
             return False
+
+        # Allow write access to /dev so stdout/stderr redirection to /dev/null and tty operations work
+        if os.path.exists("/dev"):
+            dev_fd = os.open("/dev", os.O_PATH | os.O_CLOEXEC)
+            pb_dev = LandlockPathBeneathAttr(allowed_access=LANDLOCK_ACCESS_FS_WRITE_FILE, parent_fd=dev_fd)
+            libc.syscall(SYS_landlock_add_rule, ruleset_fd, 1, ctypes.byref(pb_dev), 0)
+            os.close(dev_fd)
 
         # Allow mutation rights exclusively on permitted workspaces
         for ws in allowed_write_workspaces:

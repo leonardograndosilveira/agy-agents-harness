@@ -95,7 +95,7 @@ def run_regression_suite():
         {
             "name": "Debater 1 (Builder)",
             "thesis": "Adopt PgBouncer pooling on read-replicas.",
-            "claim": "tools configured properly in config.",
+            "claim": "tools: invoke_subagent send_message manage_subagents ask_question view_file write_to_file",
             "file": "council-moderator.md",
             "start_line": 4,
             "end_line": 10
@@ -103,9 +103,9 @@ def run_regression_suite():
         {
             "name": "Debater 2 (SRE / Realist)",
             "thesis": "Keep primary write path isolated.",
-            "claim": "commandExecutionPolicy is configured as sandbox in agent metadata.",
+            "claim": "commandExecutionPolicy: sandbox",
             "file": "council-moderator.md",
-            "start_line": 12,
+            "start_line": 11,
             "end_line": 15
         }
     ]

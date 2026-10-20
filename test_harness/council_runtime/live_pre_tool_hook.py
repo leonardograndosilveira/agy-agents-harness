@@ -29,7 +29,8 @@ MUTATING_FILE_TOOLS = {
     "edit_file",
     "replace_file_content",
     "append_file",
-    "create_file"
+    "create_file",
+    "multi_replace_file_content"
 }
 
 MUTATING_EXEC_TOOLS = {

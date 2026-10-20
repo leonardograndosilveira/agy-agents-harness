@@ -25,11 +25,11 @@ Tracked files introduced:
 2. `test_harness/council_runtime/live_hook.log`
 3. `test_harness/council_runtime/__pycache__/council_orchestrator.cpython-312.pyc`
 
-#### Specific Exposed Data:
+#### Specific Exposed Data (Redacted):
 - **Local Daemon Auth Token:**
-  `token: "da759885b2b5df8a57b2ba3a8b13139232242280387da964b836edfecc25f768"`
+  `token: "[REDACTED_LOCAL_STATIC_TOKEN_SHA256]"`
 - **Ingest Key:**
-  `ingest_key: "9186618dca624f8ca9aa4459e8039c88"`
+  `ingest_key: "[REDACTED_LOCAL_INGEST_KEY_UUID]"`
 - **Local Daemon Endpoint:**
   `http://127.0.0.1:49374/hook?event=pre-tool-use&agent=antigravity-cli&ingest_key=...`
 - **Absolute Host Paths:**

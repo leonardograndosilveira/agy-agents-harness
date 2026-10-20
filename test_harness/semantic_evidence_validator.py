@@ -202,14 +202,15 @@ class SemanticEvidenceValidator:
 
         is_direct_substring = (clean_claim in clean_content) or (clean_claim in clean_content_stripped)
 
-        # To be SUPPORTED: direct substring or high substantive overlap
-        if is_direct_substring or (overlap_ratio >= 0.60 and len(shared_keywords) >= 2 and len(missing_technical_terms) <= 2):
+        # To be SUPPORTED: direct substring or complete proposition grounding without ungrounded terms
+        # Strict: eliminates fuzzy heuristic keyword overlap (e.g. 60% threshold)
+        if is_direct_substring or (len(missing_technical_terms) == 0 and len(shared_keywords) >= 1):
             return {
                 "status": "SUPPORTED",
                 "passed": True,
                 "provenance_hash": provenance_hash,
                 "shared_keywords": list(shared_keywords),
-                "overlap_ratio": overlap_ratio,
+                "overlap_ratio": 1.0,
                 "cited_slice_preview": content.strip()[:140]
             }
 

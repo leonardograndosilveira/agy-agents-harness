@@ -97,5 +97,59 @@ class TestNegativeP0Isolation(unittest.TestCase):
             f"VULNERABILITY: Writing through symlink '{symlink_inside}' pointing to '{target_outside}' was permitted!"
         )
 
+    def test_04_landlock_blocks_overwrite_and_truncate_outside_workspace(self):
+        """
+        Defect 4: Landlock omitting WRITE_FILE and TRUNCATE allows mutating existing files outside workspace.
+        Creates an existing file outside workspace, then runs sandboxed child attempting:
+        1. Overwrite existing file content (open with 'r+' or 'w')
+        2. Truncate existing file (truncate(0))
+        Both must be denied by Landlock kernel enforcement.
+        Also asserts multi_replace_file_content is in MUTATING_FILE_TOOLS.
+        """
+        self.assertIn("multi_replace_file_content", live_pre_tool_hook.MUTATING_FILE_TOOLS)
+
+        from landlock_sandbox import run_sandboxed_command, is_landlock_supported
+        if not is_landlock_supported():
+            self.skipTest("Landlock not supported on this kernel")
+
+        existing_outside = os.path.join(self.tmp_dir, "existing_outside.txt")
+        with open(existing_outside, "w") as f:
+            f.write("ORIGINAL_UNTOUCHED_CONTENT")
+
+        # Child command attempts both overwrite and truncate on existing outside file
+        probe_script = os.path.join(self.workspace, "probe.py")
+        with open(probe_script, "w") as f:
+            f.write(
+                f"import sys\n"
+                f"path = {repr(existing_outside)}\n"
+                f"try:\n"
+                f"    with open(path, 'r+') as f: f.write('OVERWRITTEN')\n"
+                f"    sys.exit(101)\n"
+                f"except (PermissionError, OSError):\n"
+                f"    pass\n"
+                f"try:\n"
+                f"    with open(path, 'a') as f: f.truncate(0)\n"
+                f"    sys.exit(102)\n"
+                f"except (PermissionError, OSError):\n"
+                f"    pass\n"
+                f"sys.exit(0)\n"
+            )
+
+        res = run_sandboxed_command(
+            f"python3 {probe_script}",
+            allowed_workspaces=[self.workspace],
+            cwd=self.workspace
+        )
+
+        self.assertEqual(
+            res.returncode, 0,
+            f"VULNERABILITY: Landlock failed to block overwrite or truncate! Code: {res.returncode}. Output: {res.stderr}"
+        )
+
+        # Confirm file on disk remains original
+        with open(existing_outside, "r") as f:
+            content = f.read()
+        self.assertEqual(content, "ORIGINAL_UNTOUCHED_CONTENT")
+
 if __name__ == "__main__":
     unittest.main()
