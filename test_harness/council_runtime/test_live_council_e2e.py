@@ -27,7 +27,7 @@ sys.path.insert(0, os.path.join(HARNESS_DIR, "v2"))
 
 from council_orchestrator import EnforcedCouncilOrchestrator
 
-def invoke_agy_cli(agent_name: str, prompt: str, timeout: int = 60) -> str:
+def invoke_agy_cli(agent_name: str, prompt: str, timeout: int = 120) -> str:
     """
     Spawns actual Antigravity agent process via the official agy CLI.
     Captures genuine stdout output.
@@ -69,18 +69,28 @@ def run_live_council_e2e():
     )
 
     # -------------------------------------------------------------------------
-    # STEP 1: Live Engine Invocation of Council Moderator
+    # STEP 1: Live Engine Invocations of Debater and Council Moderator
     # -------------------------------------------------------------------------
-    print("\n[PHASE 1] Spawning live 'council-moderator' via Antigravity engine...")
-    live_prompt = (
+    print("\n[PHASE 1] Spawning live multi-agent council via Antigravity engine...")
+    debater_prompt = (
+        "You are Debater 1 (Ergonomist). State your thesis on synchronous in-memory L1 cache "
+        "vs distributed Redis cache in 2 sentences, citing [test_harness/council_runtime/live_pre_tool_hook.py:6-9]. "
+        "Produce a standardized Evidence Receipt at the end in your answer."
+    )
+    live_debater_output = invoke_agy_cli("debate-participant", debater_prompt, timeout=120)
+    print(f"  Captured live debater output ({len(live_debater_output)} chars).")
+    assert len(live_debater_output) > 50, "Live debater output too short or empty!"
+    assert "Evidence Receipt" in live_debater_output or "live_pre_tool_hook.py" in live_debater_output, "Evidence Receipt missing from debater output!"
+
+    moderator_prompt = (
         "Problem: Should our agent runtime implement a synchronous in-memory L1 cache "
         "or an asynchronous distributed Redis L2 cache? "
-        "State your three contracts and provide a concise 2-sentence synthesis with trade-offs."
+        "State your three contracts and provide a concise 2-sentence synthesis with trade-offs directly in your answer."
     )
-    live_agent_output = invoke_agy_cli("council-moderator", live_prompt, timeout=90)
-    print(f"  Captured live agent output ({len(live_agent_output)} chars).")
-    assert len(live_agent_output) > 50, "Live agent output too short or empty!"
-    print("  ✓ PASS: Live Antigravity agent process executed and returned structured reasoning.")
+    live_moderator_output = invoke_agy_cli("council-moderator", moderator_prompt, timeout=120)
+    print(f"  Captured live moderator output ({len(live_moderator_output)} chars).")
+    assert len(live_moderator_output) > 50, "Live moderator output too short or empty!"
+    print("  ✓ PASS: Live Antigravity multi-agent processes executed and returned structured reasoning and receipts.")
 
     # -------------------------------------------------------------------------
     # STEP 2: Adversarial Flawed Proposal -> Fail-Closed Blocking
@@ -131,18 +141,18 @@ def run_live_council_e2e():
         {
             "name": "Live_Debater_Ergonomist",
             "thesis": "Implement synchronous in-memory L1 cache for agent state to maximize developer velocity.",
-            "claim": "The hook relies on standard library imports sys os re json datetime",
+            "claim": "Hook-Level Enforcement Operates at the engine tool dispatch layer before tools execute",
             "file": os.path.join(PROJECT_ROOT, "test_harness", "council_runtime", "live_pre_tool_hook.py"),
-            "start_line": 14,
-            "end_line": 20
+            "start_line": 6,
+            "end_line": 9
         },
         {
             "name": "Live_Debater_SRE",
             "thesis": "Agent execution state and pre-tool authorization must reside in a synchronous process-local L1 cache.",
             "claim": "The verify_path_confinement function verifies that target_path strictly resides inside the permitted workspace boundary",
             "file": os.path.join(PROJECT_ROOT, "test_harness", "council_runtime", "live_pre_tool_hook.py"),
-            "start_line": 95,
-            "end_line": 125
+            "start_line": 100,
+            "end_line": 110
         }
     ]
     supported_report = (

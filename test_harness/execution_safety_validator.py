@@ -14,6 +14,7 @@ from typing import Dict, Any
 class ExecutionSafetyValidator:
     def __init__(self, workspace_root: str):
         self.workspace_root = os.path.abspath(workspace_root)
+        self.repo_root = self.workspace_root
 
     def test_sandbox_write_restrictions(self) -> Dict[str, Any]:
         """
@@ -45,7 +46,7 @@ class ExecutionSafetyValidator:
         Proves that parallel subagents operating on separate Git worktrees
         (Workspace: "branch") cannot corrupt or overwrite one another.
         """
-        temp_dir = tempfile.mkdtemp(prefix="agy_worktree_test_")
+        temp_dir = tempfile.mkdtemp(prefix="agy_worktree_test_", dir=self.repo_root)
         try:
             repo_dir = os.path.join(temp_dir, "main_repo")
             os.makedirs(repo_dir)

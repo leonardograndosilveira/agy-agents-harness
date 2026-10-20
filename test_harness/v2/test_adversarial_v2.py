@@ -66,7 +66,7 @@ def run_adversarial_v2():
     # ATTACK 2: Concurrent Subagent Git Worktree Isolation
     # =========================================================================
     print("\n[ATTACK 2] Subagent Worktree Isolation (Workspace: 'branch')...")
-    temp_dir = tempfile.mkdtemp(prefix="adv_worktree_")
+    temp_dir = tempfile.mkdtemp(prefix="adv_worktree_", dir=workspace_root)
     try:
         repo_dir = os.path.join(temp_dir, "repo")
         os.makedirs(repo_dir)

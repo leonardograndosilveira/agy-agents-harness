@@ -42,7 +42,18 @@ jobs:
             exit 1
           fi
 
+          echo "Scanning for sensitive credential patterns or tokens in tracked files..."
+          if git grep -E -i "(ingest_key|auth_token|token:\s*[\"'][a-f0-9]{32,}[\"'])" -- test_harness/ agents/ config/ 2>/dev/null; then
+            echo "ERROR: Potential credentials or tokens detected in tracked files!"
+            exit 1
+          fi
+
           echo "Repository hygiene checks passed."
+
+      - name: Run Negative Regression Suites (P0 Isolation & P1 Evidence)
+        run: |
+          python -m unittest test_harness/council_runtime/test_negative_p0_isolation.py
+          python -m unittest test_harness/test_negative_p1_evidence.py
 
       - name: Run Unit Tests (P0 Security & P1 Evidence)
         run: |
