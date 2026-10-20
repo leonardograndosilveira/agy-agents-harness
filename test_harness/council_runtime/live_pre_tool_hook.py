@@ -144,6 +144,56 @@ def verify_path_confinement(target_path: str, allowed_workspaces: List[str]) -> 
         f"(resolving to '{real_target}') is outside permitted workspaces: {allowed_workspaces}"
     )
 
+def extract_mutation_targets(tool_args: Dict[str, Any]) -> List[str]:
+    """
+    Extracts all target file paths from mutating tool arguments.
+    Supports single-target tools (TargetFile, Path) and multi-target tools
+    (multi_replace_file_content, TargetFiles, changes mapping, edits list).
+    """
+    targets = []
+
+    def add_candidate(val: Any):
+        if isinstance(val, str) and val.strip():
+            targets.append(val.strip())
+        elif isinstance(val, list):
+            for item in val:
+                add_candidate(item)
+        elif isinstance(val, dict):
+            for k in ["TargetFile", "target_file", "Path", "path", "filepath", "file_path", "file", "destination", "dest"]:
+                if k in val:
+                    add_candidate(val[k])
+
+    # 1. Direct scalar and list keys
+    for key in [
+        "TargetFile", "target_file", "Path", "path", "filepath", "file_path", "file",
+        "destination", "dest", "output_file", "output_path",
+        "TargetFiles", "target_files", "paths", "files", "filepaths", "file_paths"
+    ]:
+        if key in tool_args:
+            add_candidate(tool_args[key])
+
+    # 2. Structured collections (edits, replacements, changes)
+    for coll_key in ["edits", "replacements", "changes", "modifications", "operations", "chunks"]:
+        if coll_key in tool_args:
+            coll = tool_args[coll_key]
+            if isinstance(coll, dict):
+                for k, v in coll.items():
+                    if isinstance(k, str) and (k.startswith("/") or "/" in k or "." in k or "\\" in k):
+                        add_candidate(k)
+                    add_candidate(v)
+            elif isinstance(coll, list):
+                add_candidate(coll)
+
+    # Deduplicate while preserving order
+    seen = set()
+    unique_targets = []
+    for t in targets:
+        if t not in seen:
+            seen.add(t)
+            unique_targets.append(t)
+
+    return unique_targets
+
 def evaluate_command_safety(tool_args: Dict[str, Any], allowed_workspaces: List[str]) -> Tuple[bool, str, Optional[str]]:
     """
     Audits execution command parameters for out-of-workspace working directories,
@@ -256,17 +306,10 @@ def main():
     # Resolve allowed workspaces dynamically
     allowed_workspaces = get_allowed_workspaces(payload)
 
-    # 3. Fail-closed for mutating file tools
+    # 3. Fail-closed for mutating file tools (single and multi-target)
     if tool_name in MUTATING_FILE_TOOLS:
-        target_file = (
-            tool_args.get("TargetFile")
-            or tool_args.get("Path")
-            or tool_args.get("path")
-            or tool_args.get("target_file")
-            or tool_args.get("file_path")
-            or tool_args.get("filepath")
-        )
-        if not target_file:
+        targets = extract_mutation_targets(tool_args)
+        if not targets:
             log_event(f"DENIED: Mutating tool '{tool_name}' missing target path", {"args": list(tool_args.keys())})
             print(json.dumps({
                 "decision": "deny",
@@ -274,14 +317,15 @@ def main():
             }))
             return
 
-        is_confined, reason = verify_path_confinement(target_file, allowed_workspaces)
-        if not is_confined:
-            log_event(f"DENIED: Write to '{target_file}' blocked", {"reason": reason})
-            print(json.dumps({
-                "decision": "deny",
-                "reason": reason
-            }))
-            return
+        for target_file in targets:
+            is_confined, reason = verify_path_confinement(target_file, allowed_workspaces)
+            if not is_confined:
+                log_event(f"DENIED: Write to '{target_file}' blocked in tool '{tool_name}'", {"reason": reason, "all_targets": targets})
+                print(json.dumps({
+                    "decision": "deny",
+                    "reason": reason
+                }))
+                return
 
     # 4. Command Execution Audit
     if tool_name in MUTATING_EXEC_TOOLS:

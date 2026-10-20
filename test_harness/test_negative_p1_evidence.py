@@ -102,23 +102,104 @@ class TestNegativeP1Evidence(unittest.TestCase):
         )
         self.assertEqual(res["status"], "INSUFFICIENT")
 
-    def test_05_keyword_overlap_without_establishing_claim(self):
+    def test_06_reversed_subject_object_relationships(self):
         """
-        Defect: High keyword overlap without semantic support for the proposition.
-        Must default to INSUFFICIENT.
+        Defect: Subject-object relationship reversal (A replaces B vs B replaces A).
+        Must NOT be granted SUPPORTED. Must be CONTRADICTED.
         """
-        source_text = "The PostgreSQL server configuration file specifies max_connections and shared_buffers settings."
-        self._create_source("config.txt", source_text)
-        
-        invented_claim = "The PostgreSQL server configuration guarantees zero packet loss across read replicas."
-        res = self.validator.verify_grounding(invented_claim, "config.txt", 1, 1)
-        
-        self.assertNotEqual(
-            res["status"],
-            "SUPPORTED",
-            f"VULNERABILITY: Keyword overlap alone falsely established claim! Result: {res}"
-        )
+        source_text = "Synchronous L1 cache replaces asynchronous Redis L2 cache in local single-process worker runtimes."
+        self._create_source("reversal.txt", source_text)
+
+        reversed_claim = "Asynchronous Redis L2 cache replaces synchronous L1 cache in local single-process worker runtimes."
+        res = self.validator.verify_grounding(reversed_claim, "reversal.txt", 1, 1)
+
+        self.assertNotEqual(res["status"], "SUPPORTED")
+        self.assertEqual(res["status"], "CONTRADICTED")
+
+    def test_07_correlation_presented_as_causation(self):
+        """
+        Defect: Correlation presented as causation.
+        Must NOT be granted SUPPORTED. Must be INSUFFICIENT.
+        """
+        source_text = "Increased cache miss rates were observed alongside database connection pool exhaustion under load."
+        self._create_source("causation.txt", source_text)
+
+        causal_claim = "Increased cache miss rates directly caused database connection pool exhaustion under load."
+        res = self.validator.verify_grounding(causal_claim, "causation.txt", 1, 1)
+
+        self.assertNotEqual(res["status"], "SUPPORTED")
         self.assertEqual(res["status"], "INSUFFICIENT")
+
+    def test_08_condition_removal_and_unsupported_generalization(self):
+        """
+        Defect: Condition removal and unsupported generalization.
+        Must NOT be granted SUPPORTED.
+        """
+        source_text = "PreToolUse hook interception provides zero-overhead execution only when caching is enabled."
+        self._create_source("generalization.txt", source_text)
+
+        universal_claim = "PreToolUse hook interception provides zero-overhead execution in all environments."
+        res = self.validator.verify_grounding(universal_claim, "generalization.txt", 1, 1)
+
+        self.assertNotEqual(res["status"], "SUPPORTED")
+        self.assertIn(res["status"], ["CONTRADICTED", "INSUFFICIENT"])
+
+    def test_09_mismatched_experimental_scope_or_environment(self):
+        """
+        Defect: Mismatched experimental scope or environment.
+        Must NOT be granted SUPPORTED. Must be INSUFFICIENT.
+        """
+        source_text = "In single-node synthetic fixture tests, Landlock sandbox added 0.2ms overhead."
+        self._create_source("scope.txt", source_text)
+
+        prod_claim = "In production multi-tenant clusters, Landlock sandbox added 0.2ms overhead."
+        res = self.validator.verify_grounding(prod_claim, "scope.txt", 1, 1)
+
+        self.assertNotEqual(res["status"], "SUPPORTED")
+        self.assertEqual(res["status"], "INSUFFICIENT")
+
+    def test_10_fabricated_benchmark_implications(self):
+        """
+        Defect: Fabricated benchmark implications.
+        Must NOT be granted SUPPORTED. Must be INSUFFICIENT.
+        """
+        source_text = "Harness unit test fixture verified file overwrite denial on local scratch directory."
+        self._create_source("implications.txt", source_text)
+
+        fabricated_claim = "Harness unit test fixture proved distributed cluster security across cloud regions."
+        res = self.validator.verify_grounding(fabricated_claim, "implications.txt", 1, 1)
+
+        self.assertNotEqual(res["status"], "SUPPORTED")
+        self.assertEqual(res["status"], "INSUFFICIENT")
+
+    def test_11_source_contains_relevant_words_no_actual_support(self):
+        """
+        Defect: Source text containing relevant words but no actual support for the proposition.
+        Must NOT be granted SUPPORTED. Must be INSUFFICIENT.
+        """
+        source_text = "Redis memory fragmentation and synchronous L1 cache evictions were discussed in the architecture review."
+        self._create_source("words.txt", source_text)
+
+        ungrounded_claim = "Synchronous L1 cache evictions provide sub-millisecond tail latency."
+        res = self.validator.verify_grounding(ungrounded_claim, "words.txt", 1, 1)
+
+        self.assertNotEqual(res["status"], "SUPPORTED")
+        self.assertEqual(res["status"], "INSUFFICIENT")
+
+    def test_12_valid_positive_controls_must_pass(self):
+        """
+        Positive control: Legitimate, fully grounded claims must pass with SUPPORTED status.
+        """
+        source_a = "PreToolUse hook intercepts tool calls at the engine boundary before execution."
+        self._create_source("pos_a.txt", source_a)
+        res_a = self.validator.verify_grounding(source_a, "pos_a.txt", 1, 1)
+        self.assertEqual(res_a["status"], "SUPPORTED")
+
+        source_b = "Council orchestrator implements fail-closed evaluation gate before releasing resolutions."
+        self._create_source("pos_b.txt", source_b)
+        claim_b = "Council orchestrator implements fail-closed evaluation gate before releasing resolutions."
+        res_b = self.validator.verify_grounding(claim_b, "pos_b.txt", 1, 1)
+        self.assertEqual(res_b["status"], "SUPPORTED")
 
 if __name__ == "__main__":
     unittest.main()

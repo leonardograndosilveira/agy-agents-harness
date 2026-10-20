@@ -151,5 +151,91 @@ class TestNegativeP0Isolation(unittest.TestCase):
             content = f.read()
         self.assertEqual(content, "ORIGINAL_UNTOUCHED_CONTENT")
 
+    def test_05_multi_target_mutation_rejects_if_any_target_escapes(self):
+        """
+        Defect 5: Multi-target tools (e.g. multi_replace_file_content) with multiple file targets.
+        If any single target in a batch edit resolves outside the workspace, the entire call
+        must be fail-closed DENIED.
+        """
+        allowed = [self.workspace]
+        valid_in_ws = os.path.join(self.workspace, "valid.txt")
+        invalid_outside = os.path.join(self.tmp_dir, "outside.txt")
+
+        # Case A: TargetFiles list with mixed targets
+        tool_args_list = {"TargetFiles": [valid_in_ws, invalid_outside]}
+        targets = live_pre_tool_hook.extract_mutation_targets(tool_args_list)
+        self.assertEqual(len(targets), 2)
+        # Any outside must fail verification
+        has_escape = any(not live_pre_tool_hook.verify_path_confinement(t, allowed)[0] for t in targets)
+        self.assertTrue(has_escape, "Failed to detect out-of-workspace target in TargetFiles list!")
+
+        # Case B: edits list with dicts
+        tool_args_edits = {
+            "edits": [
+                {"TargetFile": valid_in_ws, "ReplacementContent": "ok"},
+                {"TargetFile": invalid_outside, "ReplacementContent": "evil"}
+            ]
+        }
+        targets_edits = live_pre_tool_hook.extract_mutation_targets(tool_args_edits)
+        self.assertIn(invalid_outside, targets_edits)
+
+        # Case C: changes dict mapping paths to edits
+        tool_args_changes = {
+            "changes": {
+                valid_in_ws: [{"old": "a", "new": "b"}],
+                invalid_outside: [{"old": "c", "new": "d"}]
+            }
+        }
+        targets_changes = live_pre_tool_hook.extract_mutation_targets(tool_args_changes)
+        self.assertIn(invalid_outside, targets_changes)
+
+        # Case D: All targets valid
+        valid_b = os.path.join(self.workspace, "sub", "valid_b.txt")
+        all_valid_args = {"TargetFiles": [valid_in_ws, valid_b]}
+        targets_valid = live_pre_tool_hook.extract_mutation_targets(all_valid_args)
+        all_ok = all(live_pre_tool_hook.verify_path_confinement(t, allowed)[0] for t in targets_valid)
+        self.assertTrue(all_ok)
+
+    def test_06_landlock_unavailable_fails_closed(self):
+        """
+        Defect 6: Fail-closed requirement when Landlock is unavailable or unsupported.
+        """
+        from unittest.mock import patch
+        with patch("landlock_sandbox.is_landlock_supported", return_value=False):
+            safe, reason, cmd = live_pre_tool_hook.evaluate_command_safety(
+                {"CommandLine": "echo test"},
+                [self.workspace]
+            )
+            self.assertFalse(safe, "Hook must FAIL CLOSED when Landlock is unsupported!")
+            self.assertIn("OS_SANDBOX_UNAVAILABLE", reason)
+            self.assertIsNone(cmd)
+
+    def test_07_child_processes_inherit_landlock_confinement(self):
+        """
+        Defect 7: Confinement must be inherited across fork/exec (children and grandchild processes).
+        """
+        from landlock_sandbox import run_sandboxed_command, is_landlock_supported
+        if not is_landlock_supported():
+            self.skipTest("Landlock not supported on this kernel")
+
+        existing_outside = os.path.join(self.tmp_dir, "outside_child_target.txt")
+        with open(existing_outside, "w") as f:
+            f.write("CHILD_ORIGINAL")
+
+        # Spawn a shell that spawns a subshell that spawns python attempting mutation
+        nested_cmd = (
+            f"bash -c \"bash -c 'python3 -c \\\"with open({repr(existing_outside)}, \\'w\\') as f: f.write(\\'MUTATED\\')\\\"'\""
+        )
+        res = run_sandboxed_command(
+            nested_cmd,
+            allowed_workspaces=[self.workspace],
+            cwd=self.workspace
+        )
+        # Should fail with PermissionError in Python (exit code != 0)
+        self.assertNotEqual(res.returncode, 0)
+        with open(existing_outside, "r") as f:
+            content = f.read()
+        self.assertEqual(content, "CHILD_ORIGINAL", "Child process escaped Landlock sandbox!")
+
 if __name__ == "__main__":
     unittest.main()
