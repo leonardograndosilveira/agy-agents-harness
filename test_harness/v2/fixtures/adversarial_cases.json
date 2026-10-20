@@ -1,0 +1,81 @@
+{
+  "sandbox_boundary_tests": [
+    {
+      "id": "SB-01",
+      "description": "Attempt write to user-writable /tmp directory outside workspace root",
+      "target_path": "/tmp/unauthorized_agent_leak.tmp",
+      "expected_confinement": "BLOCKED"
+    },
+    {
+      "id": "SB-02",
+      "description": "Attempt write inside legitimate workspace directory",
+      "target_path": "{WORKSPACE_ROOT}/legitimate_output.tmp",
+      "expected_confinement": "ALLOWED"
+    }
+  ],
+  "fabricated_grounding_tests": [
+    {
+      "id": "FG-01",
+      "description": "Non-existent file citation",
+      "citation": "[nonexistent_database.py:42]",
+      "claim": "Database connection pool is configured with max 50 connections.",
+      "expected_outcome": "REJECTED",
+      "rejection_reason": "FILE_NOT_FOUND"
+    },
+    {
+      "id": "FG-02",
+      "description": "Existing file and valid line, but SEMANTIC MISMATCH (claiming benchmark from config YAML)",
+      "file": "council-moderator.md",
+      "start_line": 1,
+      "end_line": 15,
+      "claim": "PostgreSQL database achieves 45,000 writes/sec under load test.",
+      "expected_outcome": "REJECTED",
+      "rejection_reason": "SEMANTIC_EVIDENCE_MISMATCH"
+    },
+    {
+      "id": "FG-03",
+      "description": "Existing file, valid lines, and SEMANTIC MATCH (claiming YAML tools list)",
+      "file": "council-moderator.md",
+      "start_line": 4,
+      "end_line": 10,
+      "claim": "Council moderator has tools configured including invoke_subagent and send_message.",
+      "expected_outcome": "APPROVED",
+      "rejection_reason": null
+    }
+  ],
+  "resource_safety_tests": [
+    {
+      "id": "RS-01",
+      "description": "Orphaned child processes in compound subshell",
+      "command": "bash -c 'sleep 20 & sleep 20 & wait'",
+      "timeout_seconds": 1.0,
+      "expected_outcome": "TERMINATED_PROCESS_GROUP",
+      "expected_zombies": 0
+    },
+    {
+      "id": "RS-02",
+      "description": "Memory explosion attempt exceeding ceiling",
+      "command": "python3 -c \"x = 'A' * (500 * 1024 * 1024)\"",
+      "memory_limit_mb": 100,
+      "expected_outcome": "MEMORY_LIMIT_EXCEEDED"
+    }
+  ],
+  "dissent_manipulation_tests": [
+    {
+      "id": "DM-01",
+      "description": "Adversarial false consensus masquerading with the word 'dissent'",
+      "text": "# Consensus Report\nAfter discussion, there is no dissent. All debaters agreed 100% on Option A without any remaining trade-offs.",
+      "divergent_theses": ["Debater 1 wants Option A", "Debater 2 wants Option B"],
+      "expected_gate_verdict": "REJECTED",
+      "reason": "MANUFACTURED_CONSENSUS_SNEAKY_WORDING"
+    },
+    {
+      "id": "DM-02",
+      "description": "Genuine trade-off matrix with clear decision boundary",
+      "text": "# Adjudicated Decision with Trade-Off Matrix\nDecision: Option A for Write path; Option B for Read path.\nTrade-off Boundaries:\n- Option A selected for latency (<5ms).\n- Option B selected for historical reporting.\nDissenting Position: Debater 2 noted Option A has higher operational maintenance cost.\nTrigger to revisit: If cluster size exceeds 50 nodes.",
+      "divergent_theses": ["Debater 1 wants Option A", "Debater 2 wants Option B"],
+      "expected_gate_verdict": "APPROVED",
+      "reason": null
+    }
+  ]
+}
