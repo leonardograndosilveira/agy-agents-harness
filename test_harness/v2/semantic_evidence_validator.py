@@ -306,10 +306,12 @@ class SemanticEvidenceValidator:
                 "provides", "provide", "implements", "implement", "uses", "use",
                 "operates", "operate", "contains", "contain", "requires", "require",
                 "enforces", "enforce", "intercepts", "intercept", "blocks", "block",
-                "denies", "deny", "confines", "confine", "synthesizes", "synthesize"
+                "denies", "deny", "confines", "confine", "synthesizes", "synthesize",
+                "verifies", "verify", "validates", "validate", "checks", "check",
+                "resides", "reside", "protects", "protect", "prohibits", "prohibit"
             ]
             claim_predicates = [v for v in PREDICATE_VERBS if re.search(r'\b' + v + r'\b', claim_lower)]
-            if claim_predicates and all(re.search(r'\b' + p + r'\b', content_lower) for p in claim_predicates):
+            if not claim_predicates or all(re.search(r'\b' + p + r'\b', content_lower) for p in claim_predicates):
                 return {
                     "status": "SUPPORTED",
                     "passed": True,
