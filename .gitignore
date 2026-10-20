@@ -59,5 +59,6 @@ venv.bak/
 *.swp
 *.swo
 
-# Temporary runtime test artifacts
+# Temporary runtime test artifacts and logs
 authorized_test.txt
+*.log
