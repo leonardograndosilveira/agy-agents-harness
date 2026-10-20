@@ -80,18 +80,18 @@ def test_legitimate_council_proposal(orchestrator: EnforcedCouncilOrchestrator):
         {
             "name": "Debater_1_Ergonomist",
             "thesis": "Implement synchronous in-memory L1 cache for agent state to maximize developer velocity and preserve microsecond tool lifecycle hooks.",
-            "claim": "The hook relies on standard library imports sys os re json datetime",
+            "claim": "Hook-Level Enforcement Operates at the engine tool dispatch layer before tools execute",
             "file": os.path.join(SCRIPT_DIR, "live_pre_tool_hook.py"),
-            "start_line": 14,
-            "end_line": 20
+            "start_line": 6,
+            "end_line": 9
         },
         {
             "name": "Debater_2_Empirical_SRE",
             "thesis": "Agent execution state and pre-tool authorization must reside in a synchronous process-local L1 cache to eliminate TOCTOU race conditions and cluster-wide blast radius.",
             "claim": "The verify_path_confinement function verifies that target_path strictly resides inside the permitted workspace boundary",
             "file": os.path.join(SCRIPT_DIR, "live_pre_tool_hook.py"),
-            "start_line": 95,
-            "end_line": 125
+            "start_line": 100,
+            "end_line": 110
         }
     ]
 

@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """
 Semantic Evidence Validator (Hardened P1)
-Verifies claim-level provenance with immutable source references.
+Verifies claim-level provenance with immutable source references and defensible verification.
 Distinguishes four distinct evidence states:
-1. SUPPORTED: Source slice directly substantiates the specific proposition and quantities.
-2. CONTRADICTED: Source slice negates or directly contradicts the proposition.
-3. INSUFFICIENT: Source mentions related entities but lacks sufficient support for the claim.
+1. SUPPORTED: Direct source support established with aligned predicates, units, and conditions.
+2. CONTRADICTED: Source slice directly conflicts with claim (polarity, negation, condition, or direction flip).
+3. INSUFFICIENT: Related evidence does not establish claim (default when inconclusive).
 4. UNVERIFIED: Citation missing, unreadable, out of bounds, or nonexistent.
 """
 
 import os
 import re
 import hashlib
-from typing import Dict, Any, List, Tuple, Set
+from typing import Dict, Any, List, Tuple, Set, Optional
 
 class SemanticEvidenceValidator:
     def __init__(self, repo_root: str = None):
@@ -57,29 +57,102 @@ class SemanticEvidenceValidator:
             "the", "and", "is", "at", "which", "on", "in", "a", "an", "this",
             "that", "to", "of", "for", "with", "as", "by", "from", "it", "or",
             "be", "are", "has", "have", "had", "been", "was", "were", "do", "does",
-            "our", "we", "they", "their", "should", "could", "would", "about"
+            "our", "we", "they", "their", "should", "could", "would", "about",
+            "configured", "including", "specified", "shows", "states", "defines",
+            "contains", "council", "moderator", "debater", "agent", "system",
+            "file", "line", "lines", "implementation", "function", "method", "class", "module"
         }
         words = re.findall(r'[a-zA-Z0-9_\-]{3,}', text.lower())
         return {w for w in words if w not in stopwords}
 
     @staticmethod
     def _extract_metrics(text: str) -> List[str]:
-        """Extracts percentages, rates, units, and standalone numerical values."""
+        """Extracts percentages, rates, units, and standalone numerical values with exact units."""
         patterns = [
             r'[+-]?\d+(?:\.\d+)?%',
-            r'\b\d+(?:\.\d+)?\s*(?:ms|s|sec|qps|QPS|req/s|cpu|CPU|ram|RAM|mb|gb|MB|GB|k|K|M)\b',
-            r'\b\d{2,}\b'
+            r'\b\d+(?:\.\d+)?\s*(?:gb/s|mb/s|kb/s|req/s|qps|iops|ms|s|sec|gb|mb|kb|cpu|ram)\b',
+            r'\b\d+(?:\.\d+)?\s*(?:k|m)\b',
+            r'\b\d+\b'
         ]
         results = []
         for pat in patterns:
             for match in re.finditer(pat, text, re.IGNORECASE):
                 results.append(match.group(0).strip().lower())
-        return list(set(results))
+        return list(dict.fromkeys(results))
+
+    def _check_propositional_entailment(self, claim_lower: str, content_lower: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+        """
+        Audits proposition-level entailment beyond token overlap:
+        - Condition removal and unsupported generalization
+        - Correlation escalated to causation
+        - Experimental scope and environment mismatch
+        - Asymmetric subject-object relational reversal
+        Returns (status, reason, detail) or (None, None, None) if no violation.
+        """
+        # 1. Condition Dropping & Generalization
+        CONDITION_MARKERS = ["only when", "only if", "requires", "conditional upon", "subject to", "assuming that", "provided that"]
+        UNCONDITIONAL_MARKERS = ["in all environments", "in all cases", "always", "unconditionally", "without restriction", "universally"]
+
+        source_has_condition = any(re.search(r'\b' + re.escape(c) + r'\b', content_lower) for c in CONDITION_MARKERS)
+        claim_has_condition = any(re.search(r'\b' + re.escape(c) + r'\b', claim_lower) for c in CONDITION_MARKERS)
+        claim_asserts_unconditional = any(re.search(r'\b' + re.escape(u) + r'\b', claim_lower) for u in UNCONDITIONAL_MARKERS)
+
+        if source_has_condition:
+            if claim_asserts_unconditional:
+                return "CONTRADICTED", "PROPOSITION_CONTRADICTED", "Claim asserts unconditional rule but source specifies mandatory condition."
+            if not claim_has_condition:
+                return "INSUFFICIENT", "CONDITION_DROPPED", "Source proposition is conditional but claim dropped the qualifying condition."
+
+        # 2. Correlation Escalated to Causation
+        CORRELATION_MARKERS = ["observed alongside", "correlated with", "associated with", "co-occurs with", "coincides with", "seen alongside"]
+        CAUSAL_MARKERS = ["directly caused", "directly causes", "causes", "caused", "leads to", "led to", "results in", "resulted in", "directly drives", "provokes", "responsible for"]
+
+        source_has_corr = any(re.search(r'\b' + re.escape(c) + r'\b', content_lower) for c in CORRELATION_MARKERS)
+        claim_has_causal = any(re.search(r'\b' + re.escape(c) + r'\b', claim_lower) for c in CAUSAL_MARKERS)
+        source_has_causal = any(re.search(r'\b' + re.escape(c) + r'\b', content_lower) for c in CAUSAL_MARKERS)
+
+        if source_has_corr and claim_has_causal and not source_has_causal:
+            return "INSUFFICIENT", "CORRELATION_AS_CAUSATION", "Claim asserts causal relationship where cited source only established correlation."
+
+        # 3. Scope & Environment Mismatch
+        TEST_SCOPES = ["single-node", "synthetic", "unit test", "fixture", "mock", "local testing", "local scratch"]
+        PROD_SCOPES = ["production", "multi-tenant", "distributed cluster", "cloud regions", "cloud region", "cross-region"]
+
+        source_test_scope = any(re.search(r'\b' + re.escape(s) + r'\b', content_lower) for s in TEST_SCOPES)
+        claim_prod_scope = any(re.search(r'\b' + re.escape(p) + r'\b', claim_lower) for p in PROD_SCOPES)
+        source_prod_scope = any(re.search(r'\b' + re.escape(p) + r'\b', content_lower) for p in PROD_SCOPES)
+
+        if source_test_scope and claim_prod_scope and not source_prod_scope:
+            return "INSUFFICIENT", "SCOPE_MISMATCH", "Claim asserts production or distributed scope but source is scoped to local or synthetic test fixtures."
+
+        # 4. Subject-Object Asymmetric Reversal
+        ASYMMETRIC_VERBS = ["replaces", "outperforms", "exceeds", "substitutes", "depends on", "protects"]
+        for verb in ASYMMETRIC_VERBS:
+            v_pat = r'\b' + verb + r'\b'
+            if re.search(v_pat, claim_lower) and re.search(v_pat, content_lower):
+                claim_parts = re.split(v_pat, claim_lower, maxsplit=1)
+                source_parts = re.split(v_pat, content_lower, maxsplit=1)
+                if len(claim_parts) == 2 and len(source_parts) == 2:
+                    claim_subj = set(self._extract_keywords(claim_parts[0]))
+                    claim_obj = set(self._extract_keywords(claim_parts[1]))
+                    source_subj = set(self._extract_keywords(source_parts[0]))
+                    source_obj = set(self._extract_keywords(source_parts[1]))
+
+                    distinctive_c_subj = claim_subj - source_subj
+                    distinctive_c_obj = claim_obj - source_obj
+                    if distinctive_c_subj and distinctive_c_obj and distinctive_c_subj.intersection(source_obj) and distinctive_c_obj.intersection(source_subj):
+                        return "CONTRADICTED", "REVERSED_RELATIONSHIP", f"Subject and object entities in relation '{verb}' are reversed relative to source proposition."
+
+        return None, None, None
 
     def verify_grounding(self, claim: str, filepath: str, start_line: int, end_line: int) -> Dict[str, Any]:
         """
         Evaluates whether the cited source slice genuinely substantiates the claim.
-        Returns one of four states: SUPPORTED, CONTRADICTED, INSUFFICIENT, UNVERIFIED.
+        Returns one of four states:
+        - SUPPORTED: Direct source support established.
+        - CONTRADICTED: Source directly conflicts with claim (polarity, negation, condition, or direction flip).
+        - INSUFFICIENT: Related evidence does not establish claim (default when inconclusive).
+        - UNVERIFIED: Source unavailable or validation inconclusive.
         """
         if not filepath:
             return {
@@ -101,44 +174,78 @@ class SemanticEvidenceValidator:
         content_lower = content.lower()
         claim_lower = claim.lower()
 
-        claim_keywords = self._extract_keywords(claim)
-        content_keywords = self._extract_keywords(content)
-        shared_keywords = claim_keywords.intersection(content_keywords)
+        # 1. Contradiction & Reversal Detection:
+        CONTRADICTION_PAIRS = [
+            ({"passed", "pass", "succeeded", "succeed", "success"}, {"failed", "fail", "failure", "violated", "exceeded limits", "degraded"}),
+            ({"higher", "greater", "faster", "more", "superior", "exceeds", "increase"}, {"lower", "less", "slower", "inferior", "worse", "decrease"}),
+            ({"enabled", "enable", "activated", "allowed", "supported", "permits"}, {"disabled", "disable", "prohibited", "denied", "blocked", "forbidden", "unsupported"}),
+            ({"safe", "optimal", "reliable", "consistent", "atomic"}, {"vulnerable", "unsafe", "flawed", "hazard", "unreliable", "stale", "inconsistent", "false atomicity"}),
+            ({"without", "unconditionally"}, {"only when", "only if", "requires", "conditional upon", "depends on"}),
+            ({"causes", "provokes", "triggers failure"}, {"prevents", "avoids", "eliminates", "protects against"})
+        ]
 
-        # 1. Contradiction Detection: Polarity Flip & Rejection
-        negation_markers = {
-            "not", "never", "prohibit", "prohibited", "denied", "blocked",
-            "forbidden", "vulnerable", "fails", "defect", "hazard", "danger",
-            "must not", "cannot", "toctou", "race condition", "stale", "flaw"
-        }
-        positive_affirmations = {
-            "rely on", "relies on", "provides", "guarantees", "atomic",
-            "safe", "optimal", "fast", "recommended", "superior"
-        }
+        for set_a, set_b in CONTRADICTION_PAIRS:
+            a_in_claim = any(re.search(r'\b' + re.escape(w) + r'\b', claim_lower) for w in set_a)
+            b_in_source = any(re.search(r'\b' + re.escape(w) + r'\b', content_lower) for w in set_b)
+            if a_in_claim and b_in_source:
+                return {
+                    "status": "CONTRADICTED",
+                    "passed": False,
+                    "provenance_hash": provenance_hash,
+                    "reason": "PROPOSITION_CONTRADICTED",
+                    "detail": "Claim asserts proposition directly contradicted by cited source slice.",
+                    "cited_slice_preview": content.strip()[:140]
+                }
+            
+            b_in_claim = any(re.search(r'\b' + re.escape(w) + r'\b', claim_lower) for w in set_b)
+            a_in_source = any(re.search(r'\b' + re.escape(w) + r'\b', content_lower) for w in set_a)
+            if b_in_claim and a_in_source:
+                return {
+                    "status": "CONTRADICTED",
+                    "passed": False,
+                    "provenance_hash": provenance_hash,
+                    "reason": "PROPOSITION_CONTRADICTED",
+                    "detail": "Claim asserts proposition directly contradicted by cited source slice.",
+                    "cited_slice_preview": content.strip()[:140]
+                }
 
-        content_has_negation = any(neg in content_lower for neg in negation_markers)
-        claim_has_positive = any(pos in claim_lower for pos in positive_affirmations)
+        # Check explicit negation markers (must not, cannot, never, not)
+        negation_markers = ["not", "never", "must not", "cannot"]
+        for neg in negation_markers:
+            if re.search(r'\b' + re.escape(neg) + r'\b', content_lower):
+                claim_has_neg = any(re.search(r'\b' + re.escape(n) + r'\b', claim_lower) for n in negation_markers)
+                if not claim_has_neg:
+                    if any(aff in claim_lower for aff in ["rely on", "relies on", "provides", "guarantees", "is optimal", "achieves", "safe"]):
+                        return {
+                            "status": "CONTRADICTED",
+                            "passed": False,
+                            "provenance_hash": provenance_hash,
+                            "reason": "PROPOSITION_CONTRADICTED",
+                            "detail": f"Source slice explicitly contains negation ('{neg}') contradicting the asserted claim.",
+                            "cited_slice_preview": content.strip()[:140]
+                        }
 
-        # If claim asserts a positive guarantee on an entity that the source explicitly negates/warns against
-        if content_has_negation and claim_has_positive and len(shared_keywords) >= 2:
-            # Check if negation in source applies to key entities in the claim
-            for neg in negation_markers:
-                if neg in content_lower:
-                    return {
-                        "status": "CONTRADICTED",
-                        "passed": False,
-                        "provenance_hash": provenance_hash,
-                        "reason": "PROPOSITION_CONTRADICTED",
-                        "detail": f"Source slice explicitly contains negation/warning ('{neg}') contradicting the asserted proposition.",
-                        "cited_slice_preview": content.strip()[:140]
-                    }
+        # 2. Propositional Entailment Check (Conditions, Causality, Scope, Reversals)
+        prop_status, prop_reason, prop_detail = self._check_propositional_entailment(claim_lower, content_lower)
+        if prop_status:
+            return {
+                "status": prop_status,
+                "passed": False,
+                "provenance_hash": provenance_hash,
+                "reason": prop_reason,
+                "detail": prop_detail,
+                "cited_slice_preview": content.strip()[:140]
+            }
 
-        # 2. Quantitative Metric Alignment Verification
+        # 3. Quantitative Metric Alignment Verification
         claim_metrics = self._extract_metrics(claim)
         content_metrics = self._extract_metrics(content)
 
         if claim_metrics:
-            missing_metrics = [m for m in claim_metrics if m not in content_lower]
+            missing_metrics = []
+            for m in claim_metrics:
+                if not re.search(r'(?:\b|\A)' + re.escape(m) + r'(?:\b|\Z)', content_lower):
+                    missing_metrics.append(m)
             if missing_metrics:
                 return {
                     "status": "INSUFFICIENT",
@@ -149,7 +256,11 @@ class SemanticEvidenceValidator:
                     "cited_slice_preview": content.strip()[:140]
                 }
 
-        # 3. Semantic Relevance and Sufficiency
+        # 4. Direct Substantive Grounding Check
+        claim_keywords = self._extract_keywords(claim)
+        content_keywords = self._extract_keywords(content)
+        shared_keywords = claim_keywords.intersection(content_keywords)
+
         if not claim_keywords:
             return {
                 "status": "INSUFFICIENT",
@@ -158,23 +269,64 @@ class SemanticEvidenceValidator:
                 "detail": "Claim contains no identifiable technical proposition."
             }
 
+        missing_technical_terms = [w for w in claim_keywords if w not in content_keywords]
         overlap_ratio = len(shared_keywords) / len(claim_keywords)
-        if overlap_ratio < 0.25 and len(shared_keywords) < 2:
+
+        # Verbatim or high-fidelity phrase match (stripping line numbers, list bullets, and YAML formatting)
+        clean_content = re.sub(r'\s+', ' ', content_lower).strip()
+        clean_claim = re.sub(r'\s+', ' ', claim_lower).strip()
+        clean_content_stripped = re.sub(r'#\s*(?:line\s*\d+:?\s*)?', '', clean_content)
+        clean_content_stripped = re.sub(r'(?:^|\s)[-*]\s+', ' ', clean_content_stripped)
+        clean_content_stripped = re.sub(r'\s+', ' ', clean_content_stripped).strip()
+
+        clean_claim_norm = clean_claim.strip('"`\' ').rstrip('.')
+        clean_content_norm = clean_content_stripped.rstrip('.')
+        is_direct_substring = (
+            (clean_claim in clean_content) or
+            (clean_claim in clean_content_stripped) or
+            (clean_claim_norm in clean_content) or
+            (clean_claim_norm in clean_content_stripped) or
+            (clean_claim_norm in clean_content_norm)
+        )
+
+        # To be SUPPORTED: direct substring or affirmative declarative grounding with zero ungrounded terms
+        # Strict: eliminates fuzzy heuristic keyword overlap (e.g. 60% threshold)
+        if is_direct_substring:
             return {
-                "status": "INSUFFICIENT",
-                "passed": False,
+                "status": "SUPPORTED",
+                "passed": True,
                 "provenance_hash": provenance_hash,
-                "reason": "EVIDENCE_INSUFFICIENT",
-                "detail": f"Cited lines do not adequately support claim. Overlap ratio: {overlap_ratio:.2f}",
+                "shared_keywords": list(shared_keywords),
+                "overlap_ratio": 1.0,
                 "cited_slice_preview": content.strip()[:140]
             }
 
-        # 4. SUPPORTED
+        if len(missing_technical_terms) == 0 and len(shared_keywords) >= 2:
+            PREDICATE_VERBS = [
+                "provides", "provide", "implements", "implement", "uses", "use",
+                "operates", "operate", "contains", "contain", "requires", "require",
+                "enforces", "enforce", "intercepts", "intercept", "blocks", "block",
+                "denies", "deny", "confines", "confine", "synthesizes", "synthesize",
+                "verifies", "verify", "validates", "validate", "checks", "check",
+                "resides", "reside", "protects", "protect", "prohibits", "prohibit"
+            ]
+            claim_predicates = [v for v in PREDICATE_VERBS if re.search(r'\b' + v + r'\b', claim_lower)]
+            if not claim_predicates or all(re.search(r'\b' + p + r'\b', content_lower) for p in claim_predicates):
+                return {
+                    "status": "SUPPORTED",
+                    "passed": True,
+                    "provenance_hash": provenance_hash,
+                    "shared_keywords": list(shared_keywords),
+                    "overlap_ratio": 1.0,
+                    "cited_slice_preview": content.strip()[:140]
+                }
+
+        # Default to INSUFFICIENT when semantic support cannot be deterministically proven
         return {
-            "status": "SUPPORTED",
-            "passed": True,
+            "status": "INSUFFICIENT",
+            "passed": False,
             "provenance_hash": provenance_hash,
-            "shared_keywords": list(shared_keywords),
-            "overlap_ratio": overlap_ratio,
+            "reason": "EVIDENCE_INSUFFICIENT",
+            "detail": f"Source does not substantiate key propositions or predicate: {missing_technical_terms[:5]}. Overlap: {overlap_ratio:.2f}",
             "cited_slice_preview": content.strip()[:140]
         }

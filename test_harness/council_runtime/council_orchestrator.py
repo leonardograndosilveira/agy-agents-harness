@@ -48,6 +48,20 @@ class EnforcedCouncilOrchestrator:
         # 1. Audit every debater's evidence receipt
         theses = []
         verified_evidence_texts = []
+
+        if len(debaters_outputs) < 2:
+            audit_trail["gate_passed"] = False
+            audit_trail["evidence_audits"].append({
+                "debater": "Council_Size",
+                "claim": "NONE",
+                "citation": "NONE",
+                "result": {
+                    "status": "UNVERIFIED",
+                    "passed": False,
+                    "reason": "INSUFFICIENT_COUNCIL_SIZE: Council requires at least 2 independent perspectives for multi-agent adjudication."
+                }
+            })
+
         for i, debater in enumerate(debaters_outputs):
             name = debater.get("name", f"Debater_{i+1}")
             thesis = debater.get("thesis", "")
@@ -56,8 +70,22 @@ class EnforcedCouncilOrchestrator:
             file_ref = debater.get("file")
             start_line = debater.get("start_line", 1)
             end_line = debater.get("end_line", 1)
+            debater_status = debater.get("status", "PARSED")
 
-            if file_ref:
+            if debater_status == "UNVERIFIED" or not file_ref or not claim or not thesis:
+                missing_res = {
+                    "status": "UNVERIFIED",
+                    "passed": False,
+                    "reason": f"EVIDENCE_RECEIPT_UNVERIFIED: {debater.get('parse_errors', ['Missing mandatory receipt fields'])}"
+                }
+                audit_trail["evidence_audits"].append({
+                    "debater": name,
+                    "claim": claim or thesis or "UNSPECIFIED",
+                    "citation": f"{file_ref}:{start_line}-{end_line}" if file_ref else "MISSING",
+                    "result": missing_res
+                })
+                audit_trail["gate_passed"] = False
+            else:
                 ev_res = self.evidence_validator.verify_grounding(claim, file_ref, start_line, end_line)
                 audit_trail["evidence_audits"].append({
                     "debater": name,
@@ -69,21 +97,6 @@ class EnforcedCouncilOrchestrator:
                     audit_trail["gate_passed"] = False
                 else:
                     verified_evidence_texts.append(claim)
-            else:
-                # Evidence is mandatory for consequential technical decisions
-                if require_evidence and (claim or thesis):
-                    missing_res = {
-                        "status": "UNVERIFIED",
-                        "passed": False,
-                        "reason": "EVIDENCE_RECEIPT_MISSING: Consequential proposition submitted without mandatory source citation."
-                    }
-                    audit_trail["evidence_audits"].append({
-                        "debater": name,
-                        "claim": claim or thesis,
-                        "citation": "NONE",
-                        "result": missing_res
-                    })
-                    audit_trail["gate_passed"] = False
 
         # 2. Audit anti-slop and false atomicity in draft report
         slop_check = self.evaluation_gate.audit_anti_slop(draft_resolution_report)
