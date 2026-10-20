@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  hygiene-and-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.12"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Repository Hygiene Audit
+        run: |
+          echo "Checking for tracked bytecode or pycache..."
+          if git ls-files | grep -E "(__pycache__|\.pyc$)"; then
+            echo "ERROR: Tracked Python bytecode or __pycache__ found in git!"
+            exit 1
+          fi
+
+          echo "Checking for tracked runtime logs..."
+          if git ls-files | grep -E "\.log$"; then
+            echo "ERROR: Tracked .log runtime files found in git!"
+            exit 1
+          fi
+
+          echo "Checking for hard-coded machine paths..."
+          if git grep -n "/home/" -- test_harness/ agents/ config/ 2>/dev/null; then
+            echo "ERROR: Hardcoded /home/ machine paths found!"
+            exit 1
+          fi
+
+          echo "Repository hygiene checks passed."
+
+      - name: Run Unit Tests (P0 Security & P1 Evidence)
+        run: |
+          python -m unittest test_harness/test_unit_security_boundary.py
+          python -m unittest test_harness/test_unit_evidence_verification.py
+
+      - name: Run Immutable Adversarial Regression Suite (8 Scenarios)
+        run: |
+          python test_harness/council_runtime/adversarial_regression.py
+
+      - name: Run Scripted Fixtures Gate Test
+        run: |
+          python test_harness/council_runtime/test_scripted_fixtures_gate.py
+
+      - name: Run End-to-End Regression Benchmark
+        run: |
+          python test_harness/council_runtime/regression_suite.py
+
+      - name: Run Adversarial V2 Acceptance Suite
+        run: |
+          python test_harness/v2/test_adversarial_v2.py
+
+      - name: Run Core Acceptance Test Suite
+        run: |
+          python test_harness/run_all_tests.py

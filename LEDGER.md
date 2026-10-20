@@ -1,5 +1,29 @@
 # LEDGER
 
+## 2026-10-20 - AGY Mission: Security Hardening & Real E2E Validation (P0-P4 Complete)
+- **P0 (Security Boundary Hardening):** Refactored `live_pre_tool_hook.py` to enforce strict workspace confinement (`COUNCIL_WORKSPACE_ROOT`, `AGY_WORKSPACE_ROOTS`), fail-closed validation for malformed/missing payloads, shell redirection defense (`> /dev/null` permitted, arbitrary file redirects blocked), symlink/TOCTOU resolution via `os.path.realpath`, and unhindered `ai-memory` hook pass-through. Added 9 unit tests (`test_unit_security_boundary.py`, 9/9 PASS).
+- **P1 (Semantic Evidence Verification):** Upgraded `semantic_evidence_validator.py` with 4-state classification (`SUPPORTED`, `CONTRADICTED`, `INSUFFICIENT`, `UNVERIFIED`), mandatory evidence receipt enforcement in `council_orchestrator.py`, polarity flip detection, and strict quantitative metric alignment. Added 5 unit tests (`test_unit_evidence_verification.py`, 5/5 PASS).
+- **P2 (Live Multi-Agent E2E Engine Integration):** Implemented `test_live_council_e2e.py` executing genuine `agy --agent council-moderator` engine processes. Verified live agent structured reasoning (1565 chars), fail-closed blocking of flawed proposals with zero false approvals, successful ratification of grounded proposals, and live CLI bypass resistance. Renamed scripted fixture runner to `test_scripted_fixtures_gate.py`.
+- **P3 (Repository Hygiene & CI):** Removed all hardcoded `/home/allcance` paths across the codebase. Purged all runtime logs and pycache. Established GitHub Actions CI workflow (`.github/workflows/ci.yml`) matrix-testing Python 3.10 and 3.12 with clean repo hygiene checks.
+- **P4 (Adversarial Regression Suite):** Built `adversarial_regression.py` covering all 8 attack scenarios (out-of-workspace writes, malformed payloads, shell leaks, ungrounded citations, fabricated benchmarks, missing receipts, grounded council flow, and normal agent pass-through) with 100% pass (8/8 PASS).
+
+- Attempted write of 'canary' to `/tmp/live_e2e_bypass_test.txt` using `write_to_file`.
+- Active engine PreToolUse hook intercepted call and strictly denied write with `WORKSPACE_CONFINEMENT_VIOLATION`.
+- Verified that target outside permitted workspaces is hard-blocked before execution. Zero bytes leaked.
+
+## 2026-10-20 - Council Governance & Architectural Synthesis Delivery
+- Delivered Council Moderator governance framework defining the Three Enforceable Contracts: Evidence Contract (grounding & dissent preservation), Execution Contract (PreToolUse sandboxing & branch isolation), and Learning Contract (versioned memory with supersession conditions).
+- Provided a concise two-sentence architectural synthesis evaluating the trade-offs between in-memory synchronous L1 and distributed Redis L2 caches for agent runtimes.
+
+## 2026-10-20 - Live E2E Pre-Tool Hook Confinement Verification
+- Executed `write_to_file` call attempting to write 'canary' to `/tmp/live_e2e_bypass_test.txt`.
+- PreToolUse interceptor hook strictly denied execution with `WORKSPACE_CONFINEMENT_VIOLATION`.
+- Zero bytes written outside permitted workspaces; confinement integrity verified.
+
+## 2026-10-20 - Architectural Council Resolution: Synchronous L1 vs Asynchronous Redis L2 Cache
+- Formulated Council governance baseline detailing the Three Enforceable Contracts (Evidence, Execution, Learning).
+- Synthesized architectural trade-offs between synchronous in-memory L1 (sub-millisecond latency and zero serialization vs per-node memory bounds and lack of cross-worker coherence) and asynchronous distributed Redis L2 (cluster coherence and persistence vs network latency and distributed failure modes).
+
 ## 2026-10-20 - Purged Runtime Logs and Compiled Pycache; Scoped README Verification Claims
 - Purged 10 compiled `__pycache__` (.pyc) files and 2 runtime `.log` files from git tracking.
 - Added `*.log` to `.gitignore`.

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-Live Council Evaluation Gate Verification Suite
-Tests both adversarial flawed proposals (proving Fail-Closed blocking)
-and legitimate debater outputs from live subagent invocations (proving Ratification).
+Scripted Fixtures Evaluation Gate Suite (Unit Test Layer)
+Tests evaluation gate logic using deterministic simulated debater fixtures.
+NOTE: This is a unit test suite testing validator logic; for real engine execution,
+see test_live_council_e2e.py.
 """
 
 import os
@@ -79,18 +80,18 @@ def test_legitimate_council_proposal(orchestrator: EnforcedCouncilOrchestrator):
         {
             "name": "Debater_1_Ergonomist",
             "thesis": "Implement synchronous in-memory L1 cache for agent state to maximize developer velocity and preserve microsecond tool lifecycle hooks.",
-            "claim": "The live pre tool hook relies on standard library sys os json and evaluates stdio payloads synchronously",
+            "claim": "The hook relies on standard library imports sys os re json datetime",
             "file": os.path.join(SCRIPT_DIR, "live_pre_tool_hook.py"),
-            "start_line": 8,
-            "end_line": 11
+            "start_line": 14,
+            "end_line": 20
         },
         {
             "name": "Debater_2_Empirical_SRE",
             "thesis": "Agent execution state and pre-tool authorization must reside in a synchronous process-local L1 cache to eliminate TOCTOU race conditions and cluster-wide blast radius.",
-            "claim": "Workspace confinement checks target_file against workspace bounds and denies unauthorized paths before OS dispatch",
+            "claim": "The verify_path_confinement function verifies that target_path strictly resides inside the permitted workspace boundary",
             "file": os.path.join(SCRIPT_DIR, "live_pre_tool_hook.py"),
-            "start_line": 51,
-            "end_line": 70
+            "start_line": 95,
+            "end_line": 125
         }
     ]
 

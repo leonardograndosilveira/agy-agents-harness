@@ -34,9 +34,11 @@ def run_adversarial_v2():
     with open(fixtures_path, "r") as f:
         fixtures = json.load(f)
 
+    repo_root = os.path.abspath(os.path.join(current_dir, "..", ".."))
+    workspace_root = os.environ.get("COUNCIL_WORKSPACE_ROOT", repo_root)
+    agents_root = os.environ.get("COUNCIL_AGENTS_ROOT", os.path.join(repo_root, "agents"))
+
     results = {}
-    workspace_root = "/home/allcance/.gemini/antigravity/scratch"
-    agents_root = "/home/allcance/.gemini/config/agents"
 
     # =========================================================================
     # ATTACK 1: Sandbox Boundary Bypass (Testing on User-Writable Paths)

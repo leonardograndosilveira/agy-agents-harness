@@ -23,8 +23,9 @@ def run_regression_suite():
     print("RUNNING COUNCIL RUNTIME ENFORCEMENT & REGRESSION PROOF")
     print("=" * 75)
 
-    workspace_root = "/home/allcance/.gemini/antigravity/scratch"
-    agents_root = "/home/allcance/.gemini/config/agents"
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    workspace_root = os.environ.get("COUNCIL_WORKSPACE_ROOT", repo_root)
+    agents_root = os.environ.get("COUNCIL_AGENTS_ROOT", os.path.join(repo_root, "agents"))
 
     interceptor = RuntimeInterceptor(workspace_root)
     orchestrator = EnforcedCouncilOrchestrator(workspace_root, agents_root)

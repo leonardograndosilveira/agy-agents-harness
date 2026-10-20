@@ -2,7 +2,8 @@
 """
 Enforced Council Orchestrator
 Wired directly into the independent Evaluation Gate.
-Demonstrates Fail-Closed Behavior: if evidence verification fails or false consensus is detected,
+Demonstrates Fail-Closed Behavior: if evidence verification fails, false consensus is detected,
+citations are contradicted/insufficient, or required evidence receipts are missing,
 the orchestrator halts execution, sets status RATIFICATION_BLOCKED, and refuses to publish.
 """
 
@@ -21,17 +22,18 @@ from semantic_evaluation_gate import SemanticEvaluationGate
 from evaluation_gate import EvaluationGate
 
 class EnforcedCouncilOrchestrator:
-    def __init__(self, workspace_root: str, agents_root: str):
-        self.workspace_root = workspace_root
-        self.agents_root = agents_root
-        self.evidence_validator = SemanticEvidenceValidator(agents_root)
-        self.evaluation_gate = EvaluationGate(agents_root)
+    def __init__(self, workspace_root: str = None, agents_root: str = None):
+        self.workspace_root = workspace_root or os.environ.get("COUNCIL_WORKSPACE_ROOT") or os.getcwd()
+        self.agents_root = agents_root or os.environ.get("COUNCIL_AGENTS_ROOT") or self.workspace_root
+        self.evidence_validator = SemanticEvidenceValidator(self.agents_root)
+        self.evaluation_gate = EvaluationGate(self.agents_root)
         self.dissent_gate = SemanticEvaluationGate()
 
     def process_council_turn(self, 
                              problem_statement: str, 
                              debaters_outputs: List[Dict[str, Any]], 
-                             draft_resolution_report: str) -> Dict[str, Any]:
+                             draft_resolution_report: str,
+                             require_evidence: bool = True) -> Dict[str, Any]:
         """
         Runs the independent evaluation gate on the council's generated outputs.
         Enforces FAIL-CLOSED ratification.
@@ -67,6 +69,21 @@ class EnforcedCouncilOrchestrator:
                     audit_trail["gate_passed"] = False
                 else:
                     verified_evidence_texts.append(claim)
+            else:
+                # Evidence is mandatory for consequential technical decisions
+                if require_evidence and (claim or thesis):
+                    missing_res = {
+                        "status": "UNVERIFIED",
+                        "passed": False,
+                        "reason": "EVIDENCE_RECEIPT_MISSING: Consequential proposition submitted without mandatory source citation."
+                    }
+                    audit_trail["evidence_audits"].append({
+                        "debater": name,
+                        "claim": claim or thesis,
+                        "citation": "NONE",
+                        "result": missing_res
+                    })
+                    audit_trail["gate_passed"] = False
 
         # 2. Audit anti-slop and false atomicity in draft report
         slop_check = self.evaluation_gate.audit_anti_slop(draft_resolution_report)
@@ -90,16 +107,25 @@ class EnforcedCouncilOrchestrator:
         if not audit_trail["gate_passed"]:
             audit_trail["status"] = "RATIFICATION_BLOCKED"
             reasons = []
-            if any(not ev["result"]["passed"] for ev in audit_trail["evidence_audits"]):
-                reasons.append("Unverified/Fabricated-Citations")
+            
+            # Evidence breakdown
+            if any(ev["result"].get("status") == "CONTRADICTED" for ev in audit_trail["evidence_audits"]):
+                reasons.append("Contradicted-Citations")
+            if any(ev["result"].get("status") == "INSUFFICIENT" for ev in audit_trail["evidence_audits"]):
+                reasons.append("Insufficient-Evidence")
+            if any(ev["result"].get("status") == "UNVERIFIED" for ev in audit_trail["evidence_audits"]):
+                reasons.append("Unverified/Missing-Citations")
+            
+            # Report audits
             if not slop_check["passed"]: reasons.append("Slop/Pseudo-math")
             if not safety_check["passed"]: reasons.append("Safety/False-atomicity")
             if not dissent_check["passed"]: reasons.append("Sneaky-consensus/Dissent-missing")
             if not quant_check["passed"]: reasons.append(f"Ungrounded-metrics: {quant_check['violations']}")
+            
             audit_trail["final_action"] = f"HALTED: Council resolution rejected by independent evaluation gate ({', '.join(reasons)}). Revision required."
             return audit_trail
 
-        # 5. APPROVED & RATIFIED
+        # 6. APPROVED & RATIFIED
         audit_trail["status"] = "RATIFIED"
         audit_trail["final_action"] = "RELEASED: Council decision passed all verification gates."
         audit_trail["ratified_report"] = draft_resolution_report

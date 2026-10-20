@@ -21,7 +21,10 @@ def run_test_suite():
     print("STARTING COUNCIL AGENT ACCEPTANCE TEST SUITE (5 ADVERSARIAL TESTS)")
     print("=" * 70)
 
-    repo_root = "/home/allcance/.gemini/config/agents"
+    repo_root = os.environ.get(
+        "COUNCIL_AGENTS_ROOT",
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "agents"))
+    )
     exec_validator = ExecutionSafetyValidator(repo_root)
     evid_validator = EvidenceValidator(repo_root)
     gate = EvaluationGate(repo_root)
@@ -110,7 +113,7 @@ def run_test_suite():
     Layer 0: Decision Anchor: Adopt Synchronous Strong Consistency for Ledger mutations; Eventual Consistency for Analytics.
     Layer 1: Trade-off & Dissent Matrix:
     - Debater 1 defended data integrity for finance.
-    - Debater 2 noted write-scaling bottlenecks under 10k QPS.
+    - Debater 2 noted write-scaling bottlenecks under high concurrency.
     Boundary Trigger: Route analytics queries to read-replicas.
     """
     gate_honest = gate.run_full_evaluation(honest_report, valid_receipt, theses)
