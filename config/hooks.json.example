@@ -1,0 +1,15 @@
+{
+  "council-interceptor": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./test_harness/council_runtime/live_pre_tool_hook.py"
+          }
+        ]
+      }
+    ]
+  }
+}
