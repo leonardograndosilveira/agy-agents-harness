@@ -45,6 +45,7 @@ class EnforcedCouncilOrchestrator:
 
         # 1. Audit every debater's evidence receipt
         theses = []
+        verified_evidence_texts = []
         for i, debater in enumerate(debaters_outputs):
             name = debater.get("name", f"Debater_{i+1}")
             thesis = debater.get("thesis", "")
@@ -64,6 +65,8 @@ class EnforcedCouncilOrchestrator:
                 })
                 if not ev_res["passed"]:
                     audit_trail["gate_passed"] = False
+                else:
+                    verified_evidence_texts.append(claim)
 
         # 2. Audit anti-slop and false atomicity in draft report
         slop_check = self.evaluation_gate.audit_anti_slop(draft_resolution_report)
@@ -73,8 +76,7 @@ class EnforcedCouncilOrchestrator:
         dissent_check = self.dissent_gate.evaluate_dissent_handling(theses, draft_resolution_report)
 
         # 4. Audit evidence completeness (checking for ungrounded numbers like +300% or 85% CPU)
-        evidence_texts = [d.get("claim", "") for d in debaters_outputs]
-        quant_check = self.evaluation_gate.audit_quantitative_assertions(draft_resolution_report, evidence_texts)
+        quant_check = self.evaluation_gate.audit_quantitative_assertions(draft_resolution_report, verified_evidence_texts)
 
         audit_trail["slop_audit"] = slop_check
         audit_trail["safety_audit"] = safety_check
@@ -88,6 +90,8 @@ class EnforcedCouncilOrchestrator:
         if not audit_trail["gate_passed"]:
             audit_trail["status"] = "RATIFICATION_BLOCKED"
             reasons = []
+            if any(not ev["result"]["passed"] for ev in audit_trail["evidence_audits"]):
+                reasons.append("Unverified/Fabricated-Citations")
             if not slop_check["passed"]: reasons.append("Slop/Pseudo-math")
             if not safety_check["passed"]: reasons.append("Safety/False-atomicity")
             if not dissent_check["passed"]: reasons.append("Sneaky-consensus/Dissent-missing")

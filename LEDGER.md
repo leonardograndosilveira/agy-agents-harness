@@ -1,5 +1,20 @@
 # LEDGER
 
+## 2026-10-20 - Live Council Engine Enforcement & Bypass Resistance Verification
+- Verified Real Antigravity PreToolUse Hook: Live tool interceptions captured in `live_hook.log` for both direct runtime and `agy` CLI operations.
+- Verified Zero-Side-Effect Bypass Resistance: Direct agent tool call and headless CLI command attempting write to `/tmp/unauthorized_test_escape.txt` were intercepted and hard-denied by `live_pre_tool_hook.py` before execution. Verified 0 bytes on disk.
+- Provenance Quarantine & Evidence Completeness: Quarantined unverified citations in `council_orchestrator.py` so unverified claims cannot ground quantitative synthesis metrics.
+- Live Multi-Agent Debate Invocations: Invoked real `debate-participant` subagents (`e0588335-fb1c-4849-aaee-ced339a5e452` and `10c00ccf-3f54-4a71-9245-3263da63d0b4`) concurrently; received grounded Round 1 Evidence Receipts.
+- Live Ratification Gate Verification: Built `test_live_council_gate.py` (2/2 PASS); verified adversarial flawed proposals trigger fail-closed `RATIFICATION_BLOCKED`, while legitimate grounded debates achieve `RATIFIED`. All 4 regression suite benchmarks passed.
+
+## 2026-10-20 - Authorized Canary Test File
+- Created `authorized_test.txt` containing `authorized_canary` in scratch directory.
+
+## 2026-10-20 - Live Hook Registration & Evidence Completeness Audit (SHA: 8a9955c)
+- Resolved Finding 1 (Hook Connectivity): Registered `council-interceptor` directly in active `~/.gemini/config/hooks.json` under `PreToolUse` for `write_to_file`, `replace_file_content`, and `run_command` pointing to `live_pre_tool_hook.py`.
+- Resolved Finding 2 (Evidence Completeness): Upgraded `evaluation_gate.py` and `council_orchestrator.py` with `audit_quantitative_assertions`. Demonstrated that final synthesis injecting ungrounded metrics (`+300% read capacity`, `85% CPU`) without benchmark evidence is strictly blocked with `UNGROUNDED_SYNTHESIS_METRIC`.
+- Re-ran `regression_suite.py`: 4/4 integration demonstrations passed.
+
 ## 2026-10-20 - Council Runtime Interception & Regression Benchmark (SHA: 81b11d2)
 - Built `scratch/test_harness/council_runtime/`:
   - `runtime_interceptor.py`: Intercepts raw tool calls at the engine boundary (`PreToolUse`); blocked `/tmp/` escapes without calling any manual helper.
